@@ -16,7 +16,7 @@
         "@ai16z/adapter-sqlite": "workspace:*",
         "@ai16z/client-auto": "workspace:*",
         "@ai16z/client-direct": "workspace:*",
-        "@ai16z/client-discord": "workspace:*",
+        "@ai16z/client-discord": "^0.1.4-alpha.3",
         "@ai16z/client-telegram": "workspace:*",
         "@ai16z/client-twitter": "workspace:*",
         "@ai16z/eliza": "workspace:*",
@@ -25,6 +25,8 @@
         "@ai16z/plugin-node": "workspace:*",
         "@ai16z/plugin-solana": "workspace:*",
         "@ai16z/plugin-starknet": "workspace:*",
+        "better-sqlite3": "11.5.0",
+        "dotenv": "^16.0.0",
         "readline": "^1.3.0",
         "ws": "^8.18.0",
         "yargs": "17.7.2"

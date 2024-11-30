@@ -62,12 +62,18 @@ export async function generateText({
         return "";
     }
 
-    elizaLogger.log("Genarating text...");
+    elizaLogger.log("Generating text...");
+    elizaLogger.debug("Context:", context);
+    elizaLogger.debug("Model class:", modelClass);
 
     const provider = runtime.modelProvider;
     const endpoint =
         runtime.character.modelEndpointOverride || models[provider].endpoint;
     let model = models[provider].model[modelClass];
+
+    elizaLogger.debug("Provider:", provider);
+    elizaLogger.debug("Model:", model);
+    elizaLogger.debug("Endpoint:", endpoint);
 
     // if runtime.getSetting("LLAMACLOUD_MODEL_LARGE") is true and modelProvider is LLAMACLOUD, then use the large model
     if (
@@ -97,6 +103,7 @@ export async function generateText({
             `Trimming context to max length of ${max_context_length} tokens.`
         );
         context = await trimTokens(context, max_context_length, "gpt-4o");
+        elizaLogger.debug("Trimmed context length:", context.length);
 
         let response: string;
 
@@ -371,10 +378,11 @@ export async function generateText({
             }
         }
 
+        elizaLogger.debug("Raw response:", response);
         return response;
     } catch (error) {
         elizaLogger.error("Error in generateText:", error);
-        throw error;
+        throw new Error(`Failed to generate text: ${error.message}`);
     }
 }
 
@@ -706,31 +714,57 @@ export async function generateMessageResponse({
         models[runtime.modelProvider].settings.maxInputTokens;
     context = trimTokens(context, max_context_length, "gpt-4o");
     let retryLength = 1000; // exponential backoff
-    while (true) {
+    let retryCount = 0;
+    const MAX_RETRIES = 3;
+
+    elizaLogger.debug("Starting generateMessageResponse");
+    elizaLogger.debug("Context:", context);
+    elizaLogger.debug("Model class:", modelClass);
+
+    while (retryCount < MAX_RETRIES) {
         try {
-            elizaLogger.log("Genarating message response..");
+            elizaLogger.log(`Generating message response (attempt ${retryCount + 1}/${MAX_RETRIES})..`);
 
             const response = await generateText({
                 runtime,
                 context,
                 modelClass,
             });
-            // try parsing the response as JSON, if null then try again
+            
+            elizaLogger.debug("Raw response from generateText:", response);
+            
             const parsedContent = parseJSONObjectFromText(response) as Content;
+            elizaLogger.debug("Parsed content:", parsedContent);
+            
             if (!parsedContent) {
                 elizaLogger.debug("parsedContent is null, retrying");
+                retryCount++;
                 continue;
             }
 
+            if (!parsedContent.text) {
+                elizaLogger.debug("parsedContent.text is missing, retrying");
+                retryCount++;
+                continue;
+            }
+
+            elizaLogger.debug("Successfully generated response");
             return parsedContent;
         } catch (error) {
             elizaLogger.error("ERROR:", error);
-            // wait for 2 seconds
+            retryCount++;
+            if (retryCount >= MAX_RETRIES) {
+                throw new Error(`Failed to generate response after ${MAX_RETRIES} attempts: ${error}`);
+            }
+            // wait for 2 seconds with exponential backoff
             retryLength *= 2;
             await new Promise((resolve) => setTimeout(resolve, retryLength));
-            elizaLogger.debug("Retrying...");
+            elizaLogger.debug(`Retrying (${retryCount}/${MAX_RETRIES})...`);
         }
     }
+
+    // If we get here, we've exceeded retries
+    throw new Error(`Failed to generate response after ${MAX_RETRIES} attempts`);
 }
 
 export const generateImage = async (
